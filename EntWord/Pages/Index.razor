@@ -1,0 +1,39 @@
+﻿@page "/"
+
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Index</PageTitle>
+
+<div 
+    style="width: 100%; height: 100vh;"
+    @onkeydown="@Keydown"
+    @onmousemove="@Focus"
+    tabindex="1000"
+    @ref="div"
+>
+    <span>@inputWord</span>
+</div>
+
+@code{
+    ElementReference div;
+
+    string inputWord = "";
+
+    protected async override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) 
+        {
+            await JSRuntime.InvokeVoidAsync("SetFocusToElement", div);
+        }            
+    }  
+
+    async Task Focus(MouseEventArgs e)
+    {
+        await JSRuntime.InvokeVoidAsync("SetFocusToElement", div);
+    }
+
+    void Keydown(KeyboardEventArgs e)
+    {
+        inputWord = $"[{e.Key}]";
+    }
+}
