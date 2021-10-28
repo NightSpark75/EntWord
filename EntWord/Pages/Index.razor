@@ -7,33 +7,207 @@
 <div 
     style="width: 100%; height: 100vh;"
     @onkeydown="@Keydown"
-    @onmousemove="@Focus"
+    @onmousemove="@OnMouseMoveFocus"
     tabindex="1000"
     @ref="div"
 >
-    <span>@inputWord</span>
+    <div class="container" style="height: 100vh;">
+        <div class="row align-items-center justify-content-center" style="height: 100vh;">
+            <div class="col col-8 main-block">
+                <div class="row align-items-center justify-content-center" style="height: 100%;">
+                    <div class="col">
+                        @if (process == status.Waiting)
+                        {
+                            <button type="button" class="btn btn-primary" @onclick="@OnClickStart" style="font-size: 48px;">Start</button>
+                        }
+                        @if (process == status.Ready)
+                        {
+                            <h1><strong>@countdown</strong></h1>
+                        }
+                        @if (process == status.Starting)
+                        {
+                            <h5>@gameTime</h5>
+                            <h1 class="@($"text-{inputStatus}")">@currentWord</h1>
+                        }
+                        @if (process == status.End)
+                        {
+                            <h1>Completed: @completed</h1>
+                            <button type="button" class="btn btn-primary" @onclick="@OnClickClose" style="font-size: 48px;">Close</button>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 @code{
+    enum status { Waiting, Ready, Starting, End }
+
+    status process = status.Waiting;
+
+    string inputStatus = "primary";
+
     ElementReference div;
 
     string inputWord = "";
 
+    int countdown = 3;
+
+    int gameTime = 10;
+
+    int completed = 0;
+
+    int wordIndex = 0;
+
+    string currentWord = "";
+
+    List<string> words = new() { "abcd", "def", "ijk", "ssss" };
+
+    /// <summary>
+    /// 畫面渲染後執行的前置工作
+    /// </summary>
+    /// <param name="firstRender"></param>
+    /// <returns></returns>
     protected async override Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender) 
         {
             await JSRuntime.InvokeVoidAsync("SetFocusToElement", div);
         }            
+        if (process == status.Ready && countdown == 3)
+        {
+            await StartingCountdown();
+        }
+        if (process== status.Starting)
+        {
+            if (gameTime == 0)
+            {
+                process = status.End;
+                StateHasChanged();
+            }
+            else
+            {
+                gameTime--;
+                Thread.Sleep(1000);
+                StateHasChanged();
+            }
+        }
     }  
 
-    async Task Focus(MouseEventArgs e)
+    /// <summary>
+    /// 按下Start
+    /// </summary>
+    /// <returns></returns>
+    async Task OnClickStart()
+    {
+        process = status.Ready;
+        countdown = 3;
+        StateHasChanged();
+        await Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// 按下Close
+    /// </summary>
+    /// <returns></returns>
+    async Task OnClickClose()
+    {
+        process = status.Waiting;
+        StateHasChanged();
+        await Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// 開始倒數
+    /// </summary>
+    /// <returns></returns>
+    async Task StartingCountdown()
+    {
+        while (countdown > 0)
+        {
+            Thread.Sleep(1000);
+            countdown--;
+            StateHasChanged();
+        }
+        await Shuffle();
+        process = status.Starting;
+        gameTime = 10;
+        completed = 0;
+        wordIndex = 0;
+        currentWord = words[wordIndex];
+        StateHasChanged();
+        await Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// 將單字庫重新洗牌
+    /// </summary>
+    /// <returns></returns>
+    async Task Shuffle()
+    {
+        var random = new Random();
+        var list = new List<string>();
+        foreach (var word in words)
+        {
+            list.Insert(random.Next(list.Count + 1), word);
+        }
+        words = list;
+        await Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// 當滑鼠移入畫面時，將控制焦點設定於主畫面圖層
+    /// </summary>
+    /// <param name="e"></param>
+    /// <returns></returns>
+    async Task OnMouseMoveFocus(MouseEventArgs e)
     {
         await JSRuntime.InvokeVoidAsync("SetFocusToElement", div);
     }
 
-    void Keydown(KeyboardEventArgs e)
+    /// <summary>
+    /// 監聽鍵盤按下事件
+    /// </summary>
+    /// <param name="e"></param>
+    async Task Keydown(KeyboardEventArgs e)
     {
-        inputWord = $"[{e.Key}]";
+        inputWord += $"[{e.Key}]";
+
+        if (currentWord.Length == inputWord.Length)
+        {
+            if (currentWord.ToUpper() == inputWord.ToUpper())
+            {
+                inputStatus = "success";
+                StateHasChanged();
+                Thread.Sleep(500);
+                completed++;
+                inputStatus = "primary";
+                wordIndex++;
+                currentWord = words[wordIndex];
+                StateHasChanged();
+            }
+            else
+            {
+                inputStatus = "danger";
+                StateHasChanged();
+                Thread.Sleep(500);
+                inputStatus = "primary";
+                wordIndex++;
+                currentWord = words[wordIndex];
+                StateHasChanged();
+            }
+        }
+        else if (currentWord.Length < inputWord.Length)
+        {
+            inputStatus = "danger";
+            StateHasChanged();
+            Thread.Sleep(500);
+            inputStatus = "primary";
+            wordIndex++;
+            currentWord = words[wordIndex];
+            StateHasChanged();
+        }
+        await Task.CompletedTask;
     }
 }
