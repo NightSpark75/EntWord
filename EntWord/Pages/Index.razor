@@ -1,4 +1,6 @@
 ﻿@page "/"
+@using EntWord.Data
+@using System.Text.RegularExpressions
 
 @inject IJSRuntime JSRuntime
 
@@ -18,7 +20,7 @@
                     <div class="col">
                         @if (process == status.Waiting)
                         {
-                            <button type="button" class="btn btn-primary" @onclick="@OnClickStart" style="font-size: 48px;">Start</button>
+                            <button type="button" class="btn btn-primary" @onclick="@OnClickStart" style="font-size: 48px;">開始</button>
                         }
                         @if (process == status.Ready)
                         {
@@ -27,12 +29,33 @@
                         @if (process == status.Starting)
                         {
                             <h5>@gameTime</h5>
-                            <h1 class="@($"text-{inputStatus}")">@currentWord</h1>
+                            <h1 class="@($"text-{inputStatus}")">
+                                @currentWord
+                            </h1>
+                            <h1>
+                                @inputWord
+                            </h1>
                         }
                         @if (process == status.End)
                         {
                             <h1>Completed: @completed</h1>
-                            <button type="button" class="btn btn-primary" @onclick="@OnClickClose" style="font-size: 48px;">Close</button>
+                            @if (completed < 50)
+                            {
+                                <h2>還要再加強!</h2>
+                            }
+                            else if (completed >=50 && completed < 100)
+                            {
+                                <h2>不錯，再加油!</h2>
+                            }
+                            else if (completed >= 100 && completed < 200)
+                            {
+                                <h2>很厲害喔!</h2>
+                            }
+                            else
+                            {
+                                <h2>你是神嗎？</h2>
+                            }
+                            <button type="button" class="btn btn-primary" @onclick="@OnClickClose" style="font-size: 48px;">結束</button>
                         }
                     </div>
                 </div>
@@ -42,6 +65,8 @@
 </div>
 
 @code{
+    readonly int _countdown = 3;
+    readonly int _gameTime = 120;
     enum status { Waiting, Ready, Starting, End }
 
     status process = status.Waiting;
@@ -50,19 +75,19 @@
 
     ElementReference div;
 
+    List<string> words = new();
+
     string inputWord = "";
 
-    int countdown = 3;
+    int countdown = 0;
 
-    int gameTime = 10;
+    int gameTime = 0;
 
     int completed = 0;
 
     int wordIndex = 0;
 
     string currentWord = "";
-
-    List<string> words = new() { "abcd", "def", "ijk", "ssss" };
 
     /// <summary>
     /// 畫面渲染後執行的前置工作
@@ -74,24 +99,6 @@
         if (firstRender) 
         {
             await JSRuntime.InvokeVoidAsync("SetFocusToElement", div);
-        }            
-        if (process == status.Ready && countdown == 3)
-        {
-            await StartingCountdown();
-        }
-        if (process== status.Starting)
-        {
-            if (gameTime == 0)
-            {
-                process = status.End;
-                StateHasChanged();
-            }
-            else
-            {
-                gameTime--;
-                Thread.Sleep(1000);
-                StateHasChanged();
-            }
         }
     }  
 
@@ -104,6 +111,29 @@
         process = status.Ready;
         countdown = 3;
         StateHasChanged();
+        while (countdown >= 0)
+        {
+            await Task.Delay(1000);
+            countdown--;
+            StateHasChanged();
+            if (countdown == 0)
+            {
+                words = Words.Shuffle();
+                process = status.Starting;
+                gameTime = _gameTime;
+                completed = 0;
+                wordIndex = 0;
+                currentWord = words[wordIndex];
+                StateHasChanged();
+                var timesover = await GameTimeCountdown();
+                if (timesover)
+                {
+                    inputWord = "";
+                    process = status.End;
+                    StateHasChanged();
+                }
+            }
+        }
         await Task.CompletedTask;
     }
 
@@ -118,42 +148,22 @@
         await Task.CompletedTask;
     }
 
-    /// <summary>
-    /// 開始倒數
-    /// </summary>
-    /// <returns></returns>
-    async Task StartingCountdown()
+    async Task<bool> GameTimeCountdown()
     {
-        while (countdown > 0)
+        while (gameTime >= 0)
         {
-            Thread.Sleep(1000);
-            countdown--;
-            StateHasChanged();
+            if (gameTime > 0)
+            {
+                gameTime--;
+                StateHasChanged();
+                await Task.Delay(1000);
+            }
+            else
+            {
+                return true;
+            }
         }
-        await Shuffle();
-        process = status.Starting;
-        gameTime = 10;
-        completed = 0;
-        wordIndex = 0;
-        currentWord = words[wordIndex];
-        StateHasChanged();
-        await Task.CompletedTask;
-    }
-
-    /// <summary>
-    /// 將單字庫重新洗牌
-    /// </summary>
-    /// <returns></returns>
-    async Task Shuffle()
-    {
-        var random = new Random();
-        var list = new List<string>();
-        foreach (var word in words)
-        {
-            list.Insert(random.Next(list.Count + 1), word);
-        }
-        words = list;
-        await Task.CompletedTask;
+        return true;
     }
 
     /// <summary>
@@ -172,41 +182,35 @@
     /// <param name="e"></param>
     async Task Keydown(KeyboardEventArgs e)
     {
-        inputWord += $"[{e.Key}]";
-
-        if (currentWord.Length == inputWord.Length)
+        var rgx = new Regex(@"^[a-z]");
+        var isMatch = rgx.IsMatch(e.Key.ToLower());
+        if (e.Code.ToLower() == "space")
         {
-            if (currentWord.ToUpper() == inputWord.ToUpper())
+            // compare
+            if (inputWord == currentWord)
             {
-                inputStatus = "success";
-                StateHasChanged();
-                Thread.Sleep(500);
                 completed++;
-                inputStatus = "primary";
-                wordIndex++;
-                currentWord = words[wordIndex];
-                StateHasChanged();
             }
-            else
+            wordIndex++;
+            if (wordIndex == words.Count)
             {
-                inputStatus = "danger";
-                StateHasChanged();
-                Thread.Sleep(500);
-                inputStatus = "primary";
-                wordIndex++;
-                currentWord = words[wordIndex];
-                StateHasChanged();
+                words = Words.Shuffle();
+                wordIndex = 0;
+            }
+            currentWord = words[wordIndex];
+            inputWord = "";
+            StateHasChanged();
+        }
+        else if (e.Code.ToLower() == "backspace")
+        {
+            if (inputWord.Length > 0)
+            {
+                inputWord = inputWord.Substring(0, inputWord.Length - 1);
             }
         }
-        else if (currentWord.Length < inputWord.Length)
+        else if (isMatch && e.Key.Length == 1)
         {
-            inputStatus = "danger";
-            StateHasChanged();
-            Thread.Sleep(500);
-            inputStatus = "primary";
-            wordIndex++;
-            currentWord = words[wordIndex];
-            StateHasChanged();
+            inputWord += $"{e.Key}";
         }
         await Task.CompletedTask;
     }
