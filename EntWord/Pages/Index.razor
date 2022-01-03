@@ -65,28 +65,49 @@
 </div>
 
 @code{
+    // 開始倒數時間設定
     readonly int _countdown = 3;
+
+    // 測驗時間設定
     readonly int _gameTime = 60;
+
+    /// <summary>
+    /// 狀態清單
+    /// Waiting: 等待，畫面顯示開始按鈕
+    /// Ready: 執行倒時計時
+    /// Starting: 開始測驗
+    /// End: 結束測驗，顯示成績
+    /// </summary>
     enum status { Waiting, Ready, Starting, End }
 
+    // 狀態
     status process = status.Waiting;
-
+    
+    // 輸入樣式
     string inputStatus = "primary";
 
+    // 主圖層
     ElementReference div;
 
+    // 單字庫
     List<string> words = new();
 
+    // 鍵盤輸入的字串
     string inputWord = "";
 
+    // 倒數時間
     int countdown = 0;
 
+    // 測驗時間
     int gameTime = 0;
 
+    // 完成次數
     int completed = 0;
 
+    // 單字索引
     int wordIndex = 0;
 
+    // 目前的單字
     string currentWord = "";
 
     /// <summary>
@@ -96,8 +117,10 @@
     /// <returns></returns>
     protected async override Task OnAfterRenderAsync(bool firstRender)
     {
+        // 第一次渲染
         if (firstRender) 
         {
+            // 將元件焦點在主圖層
             await JSRuntime.InvokeVoidAsync("SetFocusToElement", div);
         }
     }  
@@ -108,6 +131,8 @@
     /// <returns></returns>
     async Task OnClickStart()
     {
+        // 變更狀態Ready
+        // 設定倒數3秒
         process = status.Ready;
         countdown = 3;
         StateHasChanged();
@@ -118,6 +143,7 @@
             StateHasChanged();
             if (countdown == 0)
             {
+                // 倒數完畢，初始化測驗狀態
                 words = Words.Shuffle();
                 process = status.Starting;
                 gameTime = _gameTime;
@@ -125,6 +151,7 @@
                 wordIndex = 0;
                 currentWord = words[wordIndex];
                 StateHasChanged();
+                // 執行測驗倒數
                 var timesover = await GameTimeCountdown();
                 if (timesover)
                 {
@@ -143,6 +170,7 @@
     /// <returns></returns>
     async Task OnClickClose()
     {
+        // 設定狀態為Waiting
         process = status.Waiting;
         StateHasChanged();
         await Task.CompletedTask;
@@ -150,6 +178,7 @@
 
     async Task<bool> GameTimeCountdown()
     {
+        // 倒數測驗時間
         while (gameTime >= 0)
         {
             if (gameTime > 0)
@@ -182,16 +211,18 @@
     /// <param name="e"></param>
     async Task Keydown(KeyboardEventArgs e)
     {
+        // 設定正則表達式，比對英文字a-z
         var rgx = new Regex(@"^[a-z]");
         var isMatch = rgx.IsMatch(e.Key.ToLower());
         if (e.Code.ToLower() == "space")
         {
-            // compare
+            // 比對輸入字串與現在顯示單字
             if (inputWord == currentWord)
             {
                 completed++;
             }
             wordIndex++;
+            // 如果所有單字已出完，則重新洗牌
             if (wordIndex == words.Count)
             {
                 words = Words.Shuffle();
@@ -201,6 +232,7 @@
             inputWord = "";
             StateHasChanged();
         }
+        // 按下backspace，刪除最右邊的字串
         else if (e.Code.ToLower() == "backspace")
         {
             if (inputWord.Length > 0)
@@ -208,6 +240,7 @@
                 inputWord = inputWord.Substring(0, inputWord.Length - 1);
             }
         }
+        // 按下a-z時，寫入輸入字串
         else if (isMatch && e.Key.Length == 1)
         {
             inputWord += $"{e.Key}";
